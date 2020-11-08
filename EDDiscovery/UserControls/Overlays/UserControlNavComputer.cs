@@ -622,64 +622,82 @@ namespace EDDiscovery.UserControls
                     double.MinValue, 
                     double.MinValue, 
                     double.MinValue);
-                for (int i = 0; i < route.Count; ++i)
-                {
-                    GrowBounds(
-                        ref min, 
-                        ref max, 
-                        route[i].Position);
-                }
 
                 bool past = true;
                 for (int i = 0; i < route.Count; ++i)
-                {                    
-                    ctx.PictureBox.AddOwnerDraw((g, ie) =>
-                    {
-                        Tuple<int, bool> data = ie.Tag as Tuple<int, bool>;
-                        int idx = data.Item1;
-                        bool pastEntry = data.Item2;
-                        using (Brush bScoopable = new SolidBrush(Color.Green))
-                        using (Brush bUnscoopable = new SolidBrush(Color.Red))
-                        using (Pen pPast = new Pen(discoveryform.theme.VisitedSystemColor, 1.0f))
-                        using (Pen pFuture = new Pen(discoveryform.theme.NonVisitedSystemColor, 2.0f))
-                        {
-                            Vector3D pos = Map(min, max, extents, route[idx].Position);
-
-                            if (idx > 0)
-                            {
-                                Vector3D prev = Map(min, max, extents, route[idx - 1].Position);
-
-                                Pen pLine = pastEntry ? pPast : pFuture;
-                                g.DrawLine(
-                                    pLine,
-                                    canvas.X + (float)prev.DX, canvas.Y + (float)prev.DY,
-                                    canvas.X + (float)pos.DX, canvas.Y + (float)pos.DY);
-                            }
-
-                            Brush bStar = route[idx].Scoopable ? bScoopable : bUnscoopable;
-
-                            g.FillEllipse(
-                                bStar,
-                                canvas.X +  (float)pos.DX - 1.0f, canvas.Y + (float)pos.DY - 1.0f,
-                                3.0f, 3.0f);
-                        }
-                    }, canvas, Tuple.Create<int, bool>(i, past));
-
-                    Vector3D posSystem = Map(min, max, extents, route[i].Position);
-                    posSystem.DY -= 15;
-                    if (posSystem.DY < 0) { posSystem.DY += 30; }
-                    if (posSystem.DX < 50) { posSystem.DX = 50; }
-                    if (posSystem.DX > canvas.Width - 50) { posSystem.DX = canvas.Width - 50; }
-                    ctx.PictureBox.AddTextCentred(
-                        new Point((int)posSystem.DX + canvas.X, (int)posSystem.DY + canvas.Y),
-                        new Size(100, 20),
-                        route[i].SystemName,
-                        ctx.DisplayFont,
-                        ctx.ClrText,
-                        Color.Transparent,
-                        1.0f);
-                    
+                {
                     if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
+                    {
+                        past = false;
+                    }
+                    if ((Config & Configuration.showPastSystems) == Configuration.showPastSystems ||
+                        !past)
+                    {
+                        GrowBounds(
+                        ref min,
+                        ref max,
+                        route[i].Position);
+                    }
+                }
+
+                past = true;
+                for (int i = 0; i < route.Count; ++i)
+                {
+                    if ((Config & Configuration.showPastSystems) == Configuration.showPastSystems ||
+                        !past)
+                    {
+                        ctx.PictureBox.AddOwnerDraw((g, ie) =>
+                        {
+                            Tuple<int, bool> data = ie.Tag as Tuple<int, bool>;
+                            int idx = data.Item1;
+                            bool pastEntry = data.Item2;
+                            using (Brush bScoopable = new SolidBrush(Color.Green))
+                            using (Brush bUnscoopable = new SolidBrush(Color.Red))
+                            using (Pen pPast = new Pen(discoveryform.theme.VisitedSystemColor, 1.0f))
+                            using (Pen pFuture = new Pen(discoveryform.theme.NonVisitedSystemColor, 2.0f))
+                            {
+                                Vector3D pos = Map(min, max, extents, route[idx].Position);
+
+                                if (idx > 0)
+                                {
+                                    Vector3D prev = Map(min, max, extents, route[idx - 1].Position);
+
+                                    Pen pLine = pastEntry ? pPast : pFuture;
+                                    g.DrawLine(
+                                        pLine,
+                                        canvas.X + (float)prev.DX, canvas.Y + (float)prev.DY,
+                                        canvas.X + (float)pos.DX, canvas.Y + (float)pos.DY);
+                                }
+
+                                Brush bStar = route[idx].Scoopable ? bScoopable : bUnscoopable;
+
+                                g.FillEllipse(
+                                    bStar,
+                                    canvas.X + (float)pos.DX - 1.0f, canvas.Y + (float)pos.DY - 1.0f,
+                                    3.0f, 3.0f);
+                            }
+                        }, canvas, Tuple.Create<int, bool>(i, past));
+
+                        if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
+                        {
+                            past = false;
+                        }
+
+                        Vector3D posSystem = Map(min, max, extents, route[i].Position);
+                        posSystem.DY -= 15;
+                        if (posSystem.DY < 0) { posSystem.DY += 30; }
+                        if (posSystem.DX < 50) { posSystem.DX = 50; }
+                        if (posSystem.DX > canvas.Width - 50) { posSystem.DX = canvas.Width - 50; }
+                        ctx.PictureBox.AddTextCentred(
+                            new Point((int)posSystem.DX + canvas.X, (int)posSystem.DY + canvas.Y),
+                            new Size(100, 20),
+                            route[i].SystemName,
+                            ctx.DisplayFont,
+                            ctx.ClrText,
+                            Color.Transparent,
+                            1.0f);
+                    }
+                    else if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
                     {
                         past = false;
                     }
