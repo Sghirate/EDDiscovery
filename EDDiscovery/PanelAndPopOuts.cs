@@ -75,6 +75,7 @@ namespace EDDiscovery
             MaterialTrader,         // 44
             Map2D,                  // 45
             MiningOverlay,          // 46
+            NavComputer,            // 47
             // ****** ADD More here DO NOT REORDER *****
         };
 
@@ -142,6 +143,7 @@ namespace EDDiscovery
             { new PanelInfo( PanelIDs.Compass, typeof(UserControlCompass), "Compass", "Compass", "Compass overlay to show bearing to planetary coordinates", transparent:true) },
             { new PanelInfo( PanelIDs.MissionOverlay, typeof(UserControlMissionOverlay), "Mission Overlay", "MissionOV", "Mission List overlay", transparent:true) },
             { new PanelInfo( PanelIDs.MiningOverlay, typeof(UserControlMiningOverlay), "Mining Overlay", "MiningOV", "Mining overlay", transparent:true) },
+            { new PanelInfo( PanelIDs.NavComputer, typeof(UserControlNavComputer), "Nav Computer", "NavComputer", "Navigation Computer", transparent:true) },
 
             { new PanelInfo( "Settings") },
             { new PanelInfo( PanelIDs.Settings, typeof(UserControlSettings), "Settings", "SettingsPanel", "Settings for ED Discovery ") },
