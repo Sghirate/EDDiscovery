@@ -93,6 +93,7 @@ namespace EDDiscovery
             TravelPanel = 66,
             Squadrons = 67,
             PowerplayMerits = 68,
+            NavComputer = 69,
             // ****** ADD More here DO NOT RENUMBER *****
         };
 
@@ -179,6 +180,7 @@ namespace EDDiscovery
             { new PanelInfo( PanelIDs.DockingPanel, typeof(DockingPanel), "Docking Panel", "DockingPanel", "Docking Panel shows pad location" ) },
           //  { new PanelInfo( PanelIDs.AutoPanel, typeof(AutoPanel), "Auto Panel", "AutoPanel", "Auto Panel" ) },      // NOT YET
             { new PanelInfo( PanelIDs.TravelPanel, typeof(TravelPanel), "Travel Panel", "TravelPanel", "Travel Panel showing current position information" ) },
+            { new PanelInfo( PanelIDs.NavComputer, typeof(UserControlNavComputer), "Nav Computer", "NavComputer", "Navigation Computer", transparent:true) },
 
 #if DEBUG
             { new PanelInfo( PanelIDs.TestOverlay, typeof(UserControlTestOverlay), "Test Overlay", "TestOverlay", "Test Overlay" ) },
