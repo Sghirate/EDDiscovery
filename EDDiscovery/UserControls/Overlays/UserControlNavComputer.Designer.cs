@@ -32,6 +32,7 @@
             this.pictureBox = new ExtendedControls.ExtPictureBox();
             this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.miPreviousSystems = new System.Windows.Forms.ToolStripMenuItem();
+            this.miShowGraph = new System.Windows.Forms.ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox)).BeginInit();
             this.contextMenuStrip.SuspendLayout();
             this.SuspendLayout();
@@ -49,7 +50,8 @@
             // contextMenuStrip
             // 
             this.contextMenuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.miPreviousSystems});
+            this.miPreviousSystems,
+            this.miShowGraph});
             this.contextMenuStrip.Name = "contextMenuStrip1";
             this.contextMenuStrip.Size = new System.Drawing.Size(198, 26);
             // 
@@ -62,6 +64,16 @@
             this.miPreviousSystems.Size = new System.Drawing.Size(197, 22);
             this.miPreviousSystems.Text = "Show Previous Systems";
             this.miPreviousSystems.Click += new System.EventHandler(this.miPreviousSystems_Click);
+            // 
+            // miShowGraph
+            // 
+            this.miShowGraph.Checked = true;
+            this.miShowGraph.CheckOnClick = true;
+            this.miShowGraph.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.miShowGraph.Name = "miShowGraph";
+            this.miShowGraph.Size = new System.Drawing.Size(197, 22);
+            this.miShowGraph.Text = "Show Graph";
+            this.miShowGraph.Click += new System.EventHandler(this.miShowGraph_Click);
             // 
             // UserControlNavComputer
             // 
@@ -79,6 +91,7 @@
         private ExtendedControls.ExtPictureBox pictureBox;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         private System.Windows.Forms.ToolStripMenuItem miPreviousSystems;
+        private System.Windows.Forms.ToolStripMenuItem miShowGraph;
 
         #endregion
     }
