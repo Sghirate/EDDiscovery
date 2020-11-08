@@ -478,14 +478,14 @@ namespace EDDiscovery.UserControls
             bool past = true;
             for (int i = 0; i < route.Count; ++i)
             {
+                if (route[i].SystemAddress == LastHE.System.SystemAddress)
+                {
+                    past = false;
+                }
                 if (route[i].Jump != null)
                 {
                     ++nJumps;
                     dist += route[i].Jump.Distance;
-                    if (route[i].SystemAddress == LastHE.System.SystemAddress)
-                    {
-                        past = false;
-                    }
                     if (past)
                     {
                         ++nJumpsTravelled;
@@ -615,12 +615,12 @@ namespace EDDiscovery.UserControls
                     canvas.Height,
                     1);
                 Vector3D min = new Vector3D(
-                    double.MaxValue, 
-                    double.MaxValue, 
+                    double.MaxValue,
+                    double.MaxValue,
                     double.MaxValue);
                 Vector3D max = new Vector3D(
-                    double.MinValue, 
-                    double.MinValue, 
+                    double.MinValue,
+                    double.MinValue,
                     double.MinValue);
 
                 bool past = true;
@@ -630,6 +630,7 @@ namespace EDDiscovery.UserControls
                     {
                         past = false;
                     }
+
                     if ((Config & Configuration.showPastSystems) == Configuration.showPastSystems ||
                         !past)
                     {
@@ -640,9 +641,28 @@ namespace EDDiscovery.UserControls
                     }
                 }
 
+                for (int i = 0; i < 3; ++i)
+                {
+                    if (min[i] == double.MaxValue ||
+                        max[i] == double.MinValue)
+                    {
+                        return;
+                    }
+
+                    if (min[i] == max[i])
+                    {
+                        min[i] -= 0.01;
+                        max[i] += 0.01;
+                    }
+                }
+
                 past = true;
                 for (int i = 0; i < route.Count; ++i)
                 {
+                    if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
+                    {
+                        past = false;
+                    }
                     if ((Config & Configuration.showPastSystems) == Configuration.showPastSystems ||
                         !past)
                     {
@@ -658,14 +678,14 @@ namespace EDDiscovery.UserControls
                             {
                                 Vector3D pos = Map(min, max, extents, route[idx].Position);
 
-                                if (idx > 0)
+                                if (idx < route.Count - 1)
                                 {
-                                    Vector3D prev = Map(min, max, extents, route[idx - 1].Position);
+                                    Vector3D next = Map(min, max, extents, route[idx + 1].Position);
 
                                     Pen pLine = pastEntry ? pPast : pFuture;
                                     g.DrawLine(
                                         pLine,
-                                        canvas.X + (float)prev.DX, canvas.Y + (float)prev.DY,
+                                        canvas.X + (float)next.DX, canvas.Y + (float)next.DY,
                                         canvas.X + (float)pos.DX, canvas.Y + (float)pos.DY);
                                 }
 
@@ -678,28 +698,20 @@ namespace EDDiscovery.UserControls
                             }
                         }, canvas, Tuple.Create<int, bool>(i, past));
 
-                        if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
-                        {
-                            past = false;
-                        }
-
+                        Size textSize = TextRenderer.MeasureText(route[i].SystemName, ctx.DisplayFont);
                         Vector3D posSystem = Map(min, max, extents, route[i].Position);
                         posSystem.DY -= 15;
                         if (posSystem.DY < 0) { posSystem.DY += 30; }
-                        if (posSystem.DX < 50) { posSystem.DX = 50; }
-                        if (posSystem.DX > canvas.Width - 50) { posSystem.DX = canvas.Width - 50; }
+                        if (posSystem.DX < (textSize.Width / 2)) { posSystem.DX = (textSize.Width / 2); }
+                        if (posSystem.DX > canvas.Width - (textSize.Width / 2)) { posSystem.DX = canvas.Width - (textSize.Width / 2); }
                         ctx.PictureBox.AddTextCentred(
                             new Point((int)posSystem.DX + canvas.X, (int)posSystem.DY + canvas.Y),
-                            new Size(100, 20),
+                            new Size(textSize.Width, textSize.Height),
                             route[i].SystemName,
                             ctx.DisplayFont,
                             ctx.ClrText,
                             Color.Transparent,
                             1.0f);
-                    }
-                    else if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
-                    {
-                        past = false;
                     }
                 }
             }
