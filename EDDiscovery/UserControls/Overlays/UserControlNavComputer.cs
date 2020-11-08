@@ -1,6 +1,7 @@
 ﻿using EliteDangerousCore;
 using EliteDangerousCore.DB;
 using EliteDangerousCore.JournalEvents;
+using EMK.LightGeometry;
 using ExtendedControls;
 using System;
 using System.Collections.Generic;
@@ -118,7 +119,7 @@ namespace EDDiscovery.UserControls
                     ctx.PictureBox.AddTextAutoSize(
                         new Point(ctx.Pos.X + 65, ctx.Pos.Y),
                         new Size(10000, 10000),
-                        $"{preJumpFuel:##0.00} => {ctx.Fuel:##0.00} | Cost: {FuelCost:##0.00}",
+                        $"Cost: {FuelCost:##0.00} | Tank: {preJumpFuel:##0.00} => {ctx.Fuel:##0.00}",
                         ctx.DisplayFont,
                         clrFuel,
                         ctx.ClrBack,
@@ -145,6 +146,7 @@ namespace EDDiscovery.UserControls
             public long? SystemAddress { get; private set; }
             public string SystemName { get; private set; }
             public string StarClass { get; private set; }
+            public Vector3D Position { get; private set; }
             public bool Scoopable { get { return s_scoopable.Contains(StarClass); } }
             public NavJump Jump { get; set; }
 
@@ -154,6 +156,7 @@ namespace EDDiscovery.UserControls
                 SystemAddress = system.SystemAddress;
                 SystemName = system.Name;
                 StarClass = "-";
+                Position = new Vector3D(system.X, system.Y, system.Z);
             }
 
             public NavEntry(EliteDangerousCore.JournalEvents.JournalNavRoute.NavRouteEntry jeNavRouteEntry)
@@ -162,6 +165,7 @@ namespace EDDiscovery.UserControls
                 SystemAddress = jeNavRouteEntry.SystemAddress;
                 SystemName = jeNavRouteEntry.StarSystem;
                 StarClass = jeNavRouteEntry.StarClass;
+                Position = new Vector3D(jeNavRouteEntry.StarPos.X, jeNavRouteEntry.StarPos.Y, jeNavRouteEntry.StarPos.Z);
             }
 
             public void Render(ref NavRenderContext ctx)
@@ -200,6 +204,7 @@ namespace EDDiscovery.UserControls
         public enum Configuration
         {
             showPastSystems = 1,
+            drawGraph = 2,
         };
 
         private string DbSave { get { return DBName("NavComputer"); } }
@@ -207,7 +212,7 @@ namespace EDDiscovery.UserControls
 
         public HistoryEntry LastHE { get; private set; }
         public Font DisplayFont { get; private set; }
-        public Configuration Config { get; private set; } = (Configuration)(Configuration.showPastSystems);
+        public Configuration Config { get; private set; } = (Configuration)(Configuration.showPastSystems | Configuration.drawGraph);
 
         public UserControlNavComputer()
         {
@@ -224,6 +229,9 @@ namespace EDDiscovery.UserControls
             discoveryform.OnNewJournalEntry += Discoveryform_OnNewJournalEntry;
             discoveryform.OnHistoryChange += Discoveryform_OnHistoryChange;
             discoveryform.OnNewEntry += Discoveryform_OnNewEntry;
+            discoveryform.OnThemeChanged += Discoveryform_OnThemeChanged;
+
+            SizeChanged += UserControlNavComputer_SizeChanged;
 
             BaseUtils.Translator.Instance.Translate(this);
             BaseUtils.Translator.Instance.Translate(contextMenuStrip, this);
@@ -235,6 +243,9 @@ namespace EDDiscovery.UserControls
             discoveryform.OnNewJournalEntry -= Discoveryform_OnNewJournalEntry;
             discoveryform.OnHistoryChange -= Discoveryform_OnHistoryChange;
             discoveryform.OnNewEntry -= Discoveryform_OnNewEntry;
+            discoveryform.OnThemeChanged -= Discoveryform_OnThemeChanged;
+
+            SizeChanged -= UserControlNavComputer_SizeChanged;
 
             EliteDangerousCore.DB.UserDatabase.Instance.PutSettingInt(DbSave + "Config", (int)Config);
         }
@@ -254,10 +265,23 @@ namespace EDDiscovery.UserControls
             }
         }
 
+        private void UserControlNavComputer_SizeChanged(object sender, EventArgs e)
+        {
+            if ((Config & Configuration.drawGraph) == Configuration.drawGraph)
+            {
+                Display(LastHE);
+            }
+        }
+
         private void Discoveryform_OnNewEntry(HistoryEntry he, HistoryList hl)
         {
             UpdateFuelUsage(he);
             Display(he);
+        }
+
+        private void Discoveryform_OnThemeChanged()
+        {
+            Display(LastHE);
         }
 
         private void Discoveryform_OnHistoryChange(HistoryList hl)
@@ -321,6 +345,12 @@ namespace EDDiscovery.UserControls
             Display(LastHE);
         }
 
+        private void miShowGraph_Click(object sender, EventArgs e)
+        {
+            FlipConfig(Configuration.drawGraph, ((ToolStripMenuItem)sender).Checked, true);
+            Display(LastHE);
+        }
+
         private void Display(HistoryList hl)            // when user clicks around..  HE may be null here
         {
             Display(hl.GetLast);
@@ -333,7 +363,7 @@ namespace EDDiscovery.UserControls
             pictureBox.ClearImageList();
             if (LastHE != null)
             {
-                RenderRoute();
+                Render();
             }
             pictureBox.Render();
         }
@@ -413,133 +443,141 @@ namespace EDDiscovery.UserControls
             return changed;
         }
 
-        private void RenderRoute()
+        private void Render()
         {
-            NavRenderContext ctx = new NavRenderContext(
-                this,
-                LastHE,
-                new Point(10, 10));
-
             if (route.Count > 0)
             {
+                NavRenderContext ctx = new NavRenderContext(
+                    this,
+                    LastHE,
+                    new Point(10, 10));
 
-                Color clrTrans = Color.FromArgb((int)((float)ctx.ClrText.A * 0.5f), ctx.ClrText);
+                RenderSummary(ref ctx);
+                RenderRoute(ref ctx);
+                RenderGraph(ref ctx);
+            }
+        }
+
+        private void RenderSummary(ref NavRenderContext ctx)
+        {
+            Color clrTrans = Color.FromArgb((int)((float)ctx.ClrText.A * 0.5f), ctx.ClrText);
+
+            pictureBox.AddTextAutoSize(
+                new Point(ctx.Pos.X, ctx.Pos.Y),
+                new Size(10000, 10000),
+                "Journey:",
+                ctx.DisplayFont,
+                clrTrans,
+                ctx.ClrBack,
+                1.0F);
+
+            int nJumps = 0;
+            double dist = 0;
+            int nJumpsTravelled = 0;
+            double distTravelled = 0;
+            bool past = true;
+            for (int i = 0; i < route.Count; ++i)
+            {
+                if (route[i].Jump != null)
+                {
+                    ++nJumps;
+                    dist += route[i].Jump.Distance;
+                    if (route[i].SystemAddress == LastHE.System.SystemAddress)
+                    {
+                        past = false;
+                    }
+                    if (past)
+                    {
+                        ++nJumpsTravelled;
+                        distTravelled += route[i].Jump.Distance;
+                    }
+                }
+            }
+            ExtPictureBox.ImageElement txtFrom = pictureBox.AddTextAutoSize(
+                new Point(ctx.Pos.X + 70, ctx.Pos.Y),
+                new Size(10000, 10000),
+                $"{route[0].SystemName}",
+                ctx.DisplayFont,
+                ctx.ClrText,
+                ctx.ClrBack,
+                1.0F);
+            ExtPictureBox.ImageElement txtArrow = pictureBox.AddTextAutoSize(
+                new Point(txtFrom.Location.Right, ctx.Pos.Y),
+                new Size(10000, 10000),
+                "=>",
+                ctx.DisplayFont,
+                clrTrans,
+                ctx.ClrBack,
+                1.0F);
+            ExtPictureBox.ImageElement txtTo = pictureBox.AddTextAutoSize(
+                new Point(txtArrow.Location.Right, ctx.Pos.Y),
+                new Size(10000, 10000),
+                $"{route[route.Count - 1].SystemName}",
+                ctx.DisplayFont,
+                ctx.ClrText,
+                ctx.ClrBack,
+                1.0F);
+            pictureBox.AddTextAutoSize(
+                new Point(txtTo.Location.Right, ctx.Pos.Y),
+                new Size(10000, 10000),
+                $" {dist:0.00} LY    {nJumps} Jumps",
+                ctx.DisplayFont,
+                clrTrans,
+                ctx.ClrBack,
+                1.0F);
+
+            if (!past)
+            {
+                ctx.Pos = new Point(ctx.Pos.X, ctx.Pos.Y + 15);
 
                 pictureBox.AddTextAutoSize(
                     new Point(ctx.Pos.X, ctx.Pos.Y),
                     new Size(10000, 10000),
-                    "Journey:",
+                    "Travelled:",
                     ctx.DisplayFont,
                     clrTrans,
                     ctx.ClrBack,
                     1.0F);
 
-                int nJumps = 0;
-                double dist = 0;
-                int nJumpsTravelled = 0;
-                double distTravelled = 0;
-                bool past = true;
-                for (int i = 0; i < route.Count; ++i)
-                {
-                    if (route[i].Jump != null)
-                    {
-                        ++nJumps;
-                        dist += route[i].Jump.Distance;
-                        if (route[i].SystemAddress == LastHE.System.SystemAddress)
-                        {
-                            past = false;
-                        }
-                        if (past)
-                        {
-                            ++nJumpsTravelled;
-                            distTravelled += route[i].Jump.Distance;
-                        }
-                    }
-                }
-                ExtPictureBox.ImageElement txtFrom = pictureBox.AddTextAutoSize(
+                ExtPictureBox.ImageElement txtDistTravelled = pictureBox.AddTextAutoSize(
                     new Point(ctx.Pos.X + 70, ctx.Pos.Y),
                     new Size(10000, 10000),
-                    $"{route[0].SystemName}",
-                    ctx.DisplayFont,
-                    ctx.ClrText,
-                    ctx.ClrBack,
-                    1.0F);
-                ExtPictureBox.ImageElement txtArrow = pictureBox.AddTextAutoSize(
-                    new Point(txtFrom.Location.Right, ctx.Pos.Y),
-                    new Size(10000, 10000),
-                    "=>",
+                    $"{distTravelled:0.00} LY ",
                     ctx.DisplayFont,
                     clrTrans,
                     ctx.ClrBack,
                     1.0F);
-                ExtPictureBox.ImageElement txtTo = pictureBox.AddTextAutoSize(
-                    new Point(txtArrow.Location.Right, ctx.Pos.Y),
+                ExtPictureBox.ImageElement txtPercentageDistTravelled = pictureBox.AddTextAutoSize(
+                    new Point(txtDistTravelled.Location.Right, ctx.Pos.Y),
                     new Size(10000, 10000),
-                    $"{route[route.Count - 1].SystemName}",
+                    $"({((distTravelled / dist) * 100.0):0.0}%)",
                     ctx.DisplayFont,
                     ctx.ClrText,
                     ctx.ClrBack,
                     1.0F);
-                pictureBox.AddTextAutoSize(
-                    new Point(txtTo.Location.Right, ctx.Pos.Y),
+                ExtPictureBox.ImageElement txtJumpsTravelled = pictureBox.AddTextAutoSize(
+                    new Point(txtPercentageDistTravelled.Location.Right, ctx.Pos.Y),
                     new Size(10000, 10000),
-                    $" {dist:0.00} LY    {nJumps} Jumps",
+                    $"{nJumpsTravelled} Jumps ",
                     ctx.DisplayFont,
                     clrTrans,
                     ctx.ClrBack,
                     1.0F);
-
-                if (!past)
-                {
-                    ctx.Pos = new Point(ctx.Pos.X, ctx.Pos.Y + 15);
-
-                    pictureBox.AddTextAutoSize(
-                        new Point(ctx.Pos.X, ctx.Pos.Y),
-                        new Size(10000, 10000),
-                        "Travelled:",
-                        ctx.DisplayFont,
-                        clrTrans,
-                        ctx.ClrBack,
-                        1.0F);
-
-                    ExtPictureBox.ImageElement txtDistTravelled = pictureBox.AddTextAutoSize(
-                        new Point(ctx.Pos.X + 70, ctx.Pos.Y),
-                        new Size(10000, 10000),
-                        $"{distTravelled:0.00} LY ",
-                        ctx.DisplayFont,
-                        clrTrans,
-                        ctx.ClrBack,
-                        1.0F);
-                    ExtPictureBox.ImageElement txtPercentageDistTravelled = pictureBox.AddTextAutoSize(
-                        new Point(txtDistTravelled.Location.Right, ctx.Pos.Y),
-                        new Size(10000, 10000),
-                        $"({((distTravelled / dist) * 100.0):0.0}%)",
-                        ctx.DisplayFont,
-                        ctx.ClrText,
-                        ctx.ClrBack,
-                        1.0F);
-                    ExtPictureBox.ImageElement txtJumpsTravelled = pictureBox.AddTextAutoSize(
-                        new Point(txtPercentageDistTravelled.Location.Right, ctx.Pos.Y),
-                        new Size(10000, 10000),
-                        $"{nJumpsTravelled} Jumps ",
-                        ctx.DisplayFont,
-                        clrTrans,
-                        ctx.ClrBack,
-                        1.0F);
-                    ExtPictureBox.ImageElement txtPercentageJumpsTravelled = pictureBox.AddTextAutoSize(
-                        new Point(txtJumpsTravelled.Location.Right, ctx.Pos.Y),
-                        new Size(10000, 10000),
-                        $"({(((double)nJumpsTravelled / (double)nJumps) * 100.0):0.0}%)",
-                        ctx.DisplayFont,
-                        ctx.ClrText,
-                        ctx.ClrBack,
-                        1.0F);
-                }
-
-                ctx.Pos = new Point(ctx.Pos.X + 10, ctx.Pos.Y + 20);
+                ExtPictureBox.ImageElement txtPercentageJumpsTravelled = pictureBox.AddTextAutoSize(
+                    new Point(txtJumpsTravelled.Location.Right, ctx.Pos.Y),
+                    new Size(10000, 10000),
+                    $"({(((double)nJumpsTravelled / (double)nJumps) * 100.0):0.0}%)",
+                    ctx.DisplayFont,
+                    ctx.ClrText,
+                    ctx.ClrBack,
+                    1.0F);
             }
 
+            ctx.Pos = new Point(ctx.Pos.X + 10, ctx.Pos.Y + 20);
+        }
 
+        private void RenderRoute(ref NavRenderContext ctx)
+        {
             for (int i = 0; i < route.Count; ++i)
             {
                 NavEntry entry = route[i];
@@ -558,6 +596,115 @@ namespace EDDiscovery.UserControls
                     entry.Render(ref ctx);
                 }
             }
+        }
+
+        private void RenderGraph(ref NavRenderContext ctx)
+        {
+            Rectangle canvas = new Rectangle(
+                310, 10,
+                Width - 320, Height - 20);
+
+            if ((Config & Configuration.drawGraph) == Configuration.drawGraph &&
+                canvas.Width > 100 && canvas.Height > 100)
+            {
+                Color clrFull = ctx.ClrText;
+                Color clrTrans = Color.FromArgb((int)((float)ctx.ClrText.A * 0.5f), ctx.ClrText);
+
+                Vector3D extents = new Vector3D(
+                    canvas.Width,
+                    canvas.Height,
+                    1);
+                Vector3D min = new Vector3D(
+                    double.MaxValue, 
+                    double.MaxValue, 
+                    double.MaxValue);
+                Vector3D max = new Vector3D(
+                    double.MinValue, 
+                    double.MinValue, 
+                    double.MinValue);
+                for (int i = 0; i < route.Count; ++i)
+                {
+                    GrowBounds(
+                        ref min, 
+                        ref max, 
+                        route[i].Position);
+                }
+
+                bool past = true;
+                for (int i = 0; i < route.Count; ++i)
+                {                    
+                    ctx.PictureBox.AddOwnerDraw((g, ie) =>
+                    {
+                        Tuple<int, bool> data = ie.Tag as Tuple<int, bool>;
+                        int idx = data.Item1;
+                        bool pastEntry = data.Item2;
+                        using (Brush bScoopable = new SolidBrush(Color.Green))
+                        using (Brush bUnscoopable = new SolidBrush(Color.Red))
+                        using (Pen pPast = new Pen(discoveryform.theme.VisitedSystemColor, 1.0f))
+                        using (Pen pFuture = new Pen(discoveryform.theme.NonVisitedSystemColor, 2.0f))
+                        {
+                            Vector3D pos = Map(min, max, extents, route[idx].Position);
+
+                            if (idx > 0)
+                            {
+                                Vector3D prev = Map(min, max, extents, route[idx - 1].Position);
+
+                                Pen pLine = pastEntry ? pPast : pFuture;
+                                g.DrawLine(
+                                    pLine,
+                                    canvas.X + (float)prev.DX, canvas.Y + (float)prev.DY,
+                                    canvas.X + (float)pos.DX, canvas.Y + (float)pos.DY);
+                            }
+
+                            Brush bStar = route[idx].Scoopable ? bScoopable : bUnscoopable;
+
+                            g.FillEllipse(
+                                bStar,
+                                canvas.X +  (float)pos.DX - 1.0f, canvas.Y + (float)pos.DY - 1.0f,
+                                3.0f, 3.0f);
+                        }
+                    }, canvas, Tuple.Create<int, bool>(i, past));
+
+                    Vector3D posSystem = Map(min, max, extents, route[i].Position);
+                    posSystem.DY -= 15;
+                    if (posSystem.DY < 0) { posSystem.DY += 30; }
+                    if (posSystem.DX < 50) { posSystem.DX = 50; }
+                    if (posSystem.DX > canvas.Width - 50) { posSystem.DX = canvas.Width - 50; }
+                    ctx.PictureBox.AddTextCentred(
+                        new Point((int)posSystem.DX + canvas.X, (int)posSystem.DY + canvas.Y),
+                        new Size(100, 20),
+                        route[i].SystemName,
+                        ctx.DisplayFont,
+                        ctx.ClrText,
+                        Color.Transparent,
+                        1.0f);
+                    
+                    if (route[i].SystemAddress == ctx.LastEntry.System.SystemAddress)
+                    {
+                        past = false;
+                    }
+                }
+            }
+        }
+
+        private void GrowBounds(ref Vector3D min, ref Vector3D max, Vector3D point)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                min[i] = Math.Min(min[i], point[i]);
+                max[i] = Math.Max(max[i], point[i]);
+            }
+        }
+
+        private Vector3D Map(Vector3D min, Vector3D max, Vector3D extents, Vector3D pos)
+        {
+            double[] v = new double[3];
+            for (int i = 0; i < 3; ++i)
+            {
+                v[i] = pos[i] - min[i];
+                v[i] = (v[i] / (max[i] - min[i])) * extents[i];
+            }
+            return new Vector3D(v);
         }
     }
 }
